@@ -114,4 +114,9 @@ fn main() {
 
         handles.push(handle);
     }
+
+    //waiting for the workers to complete their jobs
+    for handle in handles {
+        handle.join().unwrap();
+    }
 }
