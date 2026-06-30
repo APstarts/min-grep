@@ -1,4 +1,5 @@
 use cli_tool_rust::{search_case_insensitive, search_case_sensitive};
+use std::path::{Path, PathBuf};
 use std::{
     env,
     fs::{self, File},
@@ -49,7 +50,7 @@ fn main() {
     let query = commands.next().expect("Missing argument: query"); //parsing the search "query" with which the program was started to look for files which might contain this search query.
     let entries = fs::read_dir(&file_path) //reading the directory provided in the arguments to get the list of files inside the directory.
         .unwrap_or_else(|_| panic!("Failed to read directory: {}", file_path));
-    let files: Vec<_> = entries
+    let files: Vec<PathBuf> = entries
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .collect(); //storing the list of files with their complete path into a vector.
     // the following code was a bottle neck because when we do Vec::new() rust allocates zero memory. As you push items into it, the vector fills. Once it hits capacity, Rust has to:
@@ -74,15 +75,23 @@ fn main() {
     //     }
     // }
     for file in &files {
-        let f = File::open(file).expect("failed to open file");
-        let reader = BufReader::new(f); //using bufreader to reduce memory usage. Instead of taking the complete contents into the ram it uses buffer of small sizes to load into ram
-        for line in reader.lines() {
-            if let Ok(line) = line {
-                if line.contains(&query) {
-                    println!("Query found in file: {file:?}");
-                    break;
-                }
+        if search_file(file, &query) {
+            println!("Query found in file: {file:?}");
+        }
+    }
+}
+
+/// this function searches a file's content with the query provided and returns a bool, if found then true and if not found then false.
+fn search_file(file: &Path, query: &str) -> bool {
+    let f = File::open(file).expect("failed to open file");
+    let reader = BufReader::new(f);
+
+    for line in reader.lines() {
+        if let Ok(line) = line {
+            if line.contains(query) {
+                return true;
             }
         }
     }
+    false
 }
