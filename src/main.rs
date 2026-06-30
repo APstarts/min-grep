@@ -1,9 +1,11 @@
-use cli_tool_rust::{search_case_insensitive, search_case_sensitive};
+use cli_tool_rust::search_file;
 use std::path::{Path, PathBuf};
 use std::{
     env,
     fs::{self, File},
     io::{BufRead, BufReader, Read},
+    sync::{Arc, Mutex, mpsc},
+    thread,
 };
 
 struct Config {
@@ -74,24 +76,42 @@ fn main() {
     //         files.push(dir_entry.path());
     //     }
     // }
-    for file in &files {
-        if search_file(file, &query) {
-            println!("Query found in file: {file:?}");
-        }
+    // for file in &files {
+    //     if search_file(file, &query) {
+    //         println!("Query found in file: {file:?}");
+    //     }
+    // }
+    //
+    let (tx, rx) = mpsc::channel(); //threadpool
+    let rx = Arc::new(Mutex::new(rx)); //This allows multiple ownerships with Arc and Mutex allows locked access.
+    for file in files {
+        tx.send(file).expect("Failed to send job"); //sending the jobs to channel as a que to the threadpool
     }
-}
+    drop(tx);
 
-/// this function searches a file's content with the query provided and returns a bool, if found then true and if not found then false.
-fn search_file(file: &Path, query: &str) -> bool {
-    let f = File::open(file).expect("failed to open file");
-    let reader = BufReader::new(f);
+    let mut handles: Vec<thread::JoinHandle<()>> = Vec::new();
+    //creating 4 workers
+    for _ in 0..4 {
+        let rx = Arc::clone(&rx);
 
-    for line in reader.lines() {
-        if let Ok(line) = line {
-            if line.contains(query) {
-                return true;
+        let worker_query = query.clone();
+
+        let handle = thread::spawn(move || {
+            loop {
+                let job = rx.lock().unwrap().recv();
+
+                match job {
+                    Ok(file) => {
+                        if search_file(&file, &worker_query) {
+                            println!("Found in {:?}", file);
+                        }
+                    }
+
+                    Err(_) => break,
+                }
             }
-        }
+        });
+
+        handles.push(handle);
     }
-    false
 }
