@@ -49,7 +49,7 @@ fn main() {
     let mut commands = env::args(); //capturing the arguments with which the program was started.
     commands.next();
     let file_path = commands.next().expect("No file path was provided."); //parsing the file_path from the arguments with which which the program was started
-    let query = commands.next().expect("Missing argument: query"); //parsing the search "query" with which the program was started to look for files which might contain this search query.
+    let query = Arc::new(commands.next().expect("Missing argument: query")); //parsing the search "query" with which the program was started to look for files which might contain this search query.
     let entries = fs::read_dir(&file_path) //reading the directory provided in the arguments to get the list of files inside the directory.
         .unwrap_or_else(|_| panic!("Failed to read directory: {}", file_path));
     let files: Vec<PathBuf> = entries
@@ -82,6 +82,7 @@ fn main() {
     //     }
     // }
     //
+    let number_of_cores = thread::available_parallelism().unwrap().get(); //get the number of logical cores of cpu available.
     let (tx, rx) = mpsc::channel(); //threadpool
     let rx = Arc::new(Mutex::new(rx)); //This allows multiple ownerships with Arc and Mutex allows locked access.
     for file in files {
@@ -91,10 +92,10 @@ fn main() {
 
     let mut handles: Vec<thread::JoinHandle<()>> = Vec::new();
     //creating 4 workers
-    for _ in 0..4 {
+    for _ in 0..number_of_cores {
         let rx = Arc::clone(&rx);
 
-        let worker_query = query.clone();
+        let worker_query = Arc::clone(&query);
 
         let handle = thread::spawn(move || {
             loop {
